@@ -55,16 +55,50 @@
     opacity: .9; min-height: 1.25em;
   }
 
-  .content {
-    flex: 1; min-height: 0;
-    display: grid;
-    grid-template-columns: 17.5rem minmax(0, 1fr);
-    gap: clamp(1rem, 2.5vw, 2rem);
-  }
+  .content { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
 
-  /* Seitenleiste */
-  .side { overflow: auto; display: flex; flex-direction: column; gap: .5rem; padding: 3px 4px 3px 3px; }
-  .side h2 { margin: 0 0 .1rem; font-size: .75rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; opacity: .6; }
+  /* Werkzeugleiste (immer sichtbar) */
+  .bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .6rem; }
+  .bar .form { flex: 1 1 15rem; min-width: 12rem; }
+
+  /* Szenario-Menü (ausklappbar) */
+  .drawer {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 60;
+    width: min(23rem, 88vw); background: #fff;
+    border-right: 1.3px solid var(--line); box-shadow: 8px 0 30px rgba(201, 59, 135, .15);
+    padding: var(--pad); overflow: auto;
+    display: flex; flex-direction: column; gap: .5rem;
+    transform: translateX(-104%); visibility: hidden;
+    transition: transform .28s ease, visibility 0s linear .28s;
+  }
+  .drawer.open { transform: none; visibility: visible; transition: transform .28s ease; }
+  .drawer .dhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: .2rem; }
+  .backdrop {
+    position: fixed; inset: 0; z-index: 55; background: rgba(201, 59, 135, .12);
+    opacity: 0; pointer-events: none; transition: opacity .28s ease;
+  }
+  .backdrop.open { opacity: 1; pointer-events: auto; }
+  .drawer h2 { margin: 0; font-size: .75rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; opacity: .6; }
+
+  /* Startbildschirm */
+  .start {
+    position: fixed; inset: 0; z-index: 100; background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: clamp(.8rem, 2.6vh, 1.6rem); padding: var(--pad); text-align: center;
+    transition: opacity .45s ease, transform .45s ease;
+  }
+  .start.gone { opacity: 0; transform: scale(1.03); pointer-events: none; }
+  .start .crest { width: clamp(4rem, 9vw, 6.5rem); }
+  .start h1 { font-size: clamp(2rem, 6vw, 4.4rem); max-width: 18ch; }
+  .start .lead { margin: 0; font-size: clamp(1rem, 2vw, 1.4rem); font-weight: 600; opacity: .85; max-width: 38ch; line-height: 1.35; }
+  .start svg { width: min(68vw, 460px); max-height: 30vh; height: auto; }
+  .go {
+    font: inherit; font-size: clamp(1.1rem, 2vw, 1.5rem); font-weight: 700; letter-spacing: .08em;
+    color: #fff; background: var(--pink); border: 0; border-radius: 999px;
+    padding: .75em 2.6em; cursor: pointer; transition: background .2s ease, transform .15s ease;
+  }
+  .go:hover { background: #a82c6d; transform: translateY(-1px); }
+  .go:focus-visible { outline: 3px solid var(--pink); outline-offset: 4px; }
   .scrow { display: flex; gap: .3rem; align-items: stretch; }
   .sc {
     flex: 1; text-align: left;
@@ -138,11 +172,13 @@
   }
   .tray.over { background: var(--pink-soft); border-color: var(--pink); }
   .tray::before {
-    content: "Mögliche Folgen – auf eine Schale ziehen"; position: absolute; left: 16px; top: 5px;
+    content: "Mögliche Folgen – auf eine Schale ziehen · Rechtsklick auf einen Kasten in der Schale: größer"; position: absolute; left: 16px; top: 5px;
     font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; opacity: .55;
   }
+  .tray.idle::before { content: none; }
+  .tray.idle:empty::after { content: "Wähle im Menü „Szenarien“ ein Szenario oder tippe oben eine eigene Frage ein."; }
   .tray:empty::after {
-    content: "Noch keine Folgen. Links unter „Folge hinzufügen“ eigene Kästchen anlegen.";
+    content: "Noch keine Folgen. Oben eigene Kästchen beschriften und anlegen.";
     margin: auto; font-size: 14px; font-weight: 500; opacity: .6;
   }
 
@@ -183,9 +219,7 @@
 
   @media (max-width: 900px) {
     main { height: auto; min-height: 100dvh; }
-    .content { grid-template-columns: 1fr; }
     .stagewrap { aspect-ratio: 1000 / 640; }
-    .side { overflow: visible; }
   }
 </style>
 </head>
@@ -199,25 +233,20 @@
     </div>
   </header>
 
-  <div class="content">
-    <aside class="side" aria-label="Szenarien">
-      <h2>Szenarien</h2>
-      <div id="list" style="display:flex;flex-direction:column;gap:.5rem"></div>
-      <button class="btn" id="newcase" type="button">＋ Eigener Fall</button>
-      <form class="form" id="caseform" hidden>
-        <input id="cq" type="text" maxlength="140" placeholder="Deine Frage …" aria-label="Eigene Frage">
-        <button class="btn primary" type="submit">Anlegen</button>
-      </form>
-      <hr class="sep">
-      <h2>Folge hinzufügen</h2>
-      <form class="form" id="boxform">
-        <input id="nb" type="text" maxlength="70" placeholder="Beschriftung …" aria-label="Beschriftung des neuen Kastens">
-        <button class="btn primary" type="submit" aria-label="Kasten anlegen">＋</button>
-      </form>
-      <button class="btn" id="reset" type="button">Waage leeren</button>
-      <p class="help">Kästen auf die linke oder rechte Schale ziehen. Rechtsklick (oder Doppelklick) auf einen Kasten in der Schale vergrößert ihn: Stufe 1, 2, 3, dann wieder 1. Größere Kästen wiegen mehr.</p>
-    </aside>
+  <div class="bar">
+    <button class="btn" id="menu" type="button" aria-expanded="false" aria-controls="drawer">☰ Szenarien</button>
+    <div class="form" id="caseform">
+      <input id="cq" type="text" maxlength="140" placeholder="Eigenes Szenario: Deine Frage …" aria-label="Eigenes Szenario beschreiben">
+      <button class="btn primary" id="caseadd" type="button">Anlegen</button>
+    </div>
+    <div class="form" id="boxform">
+      <input id="nb" type="text" maxlength="70" placeholder="Eigene Folge beschriften …" aria-label="Beschriftung des neuen Kastens">
+      <button class="btn primary" id="boxadd" type="button" aria-label="Kasten anlegen">＋</button>
+    </div>
+    <button class="btn" id="reset" type="button">Waage leeren</button>
+  </div>
 
+  <div class="content">
     <div class="stagewrap" id="wrap">
       <div class="stage" id="stage">
         <svg class="frame" width="1000" height="640" viewBox="0 0 1000 640" aria-hidden="true">
@@ -254,6 +283,18 @@
     </div>
   </div>
 </main>
+
+<div class="backdrop" id="backdrop"></div>
+<aside class="drawer" id="drawer" aria-label="Szenarien" aria-hidden="true">
+  <div class="dhead"><h2>Szenarien</h2><button class="scdel" id="dclose" type="button" aria-label="Menü schließen">×</button></div>
+  <div id="list" style="display:flex;flex-direction:column;gap:.5rem"></div>
+  <hr class="sep">
+  <p class="help">Kästen auf die linke oder rechte Schale ziehen. Rechtsklick (oder Doppelklick) auf einen Kasten in der Schale vergrößert ihn: Stufe 1, 2, 3, dann wieder 1. Größere Kästen wiegen mehr.</p>
+</aside>
+
+<section class="start" id="start" aria-label="Startbildschirm">
+  <button class="go" id="go" type="button" autofocus>START</button>
+</section>
 
 <script>
 (function () {
@@ -381,8 +422,9 @@
 
   function renderScenario() {
     tray.innerHTML = ''; load.L.innerHTML = ''; load.R.innerHTML = '';
-    cur.boxes.forEach(attach);
-    $('q').textContent = cur.q;
+    tray.classList.toggle('idle', !cur);
+    if (cur) cur.boxes.forEach(attach);
+    $('q').textContent = cur ? cur.q : '';
     update();
     renderList();
   }
@@ -505,14 +547,14 @@
       var b = document.createElement('button');
       b.type = 'button'; b.className = 'sc'; b.textContent = s.q;
       b.setAttribute('aria-pressed', s === cur);
-      b.addEventListener('click', function () { if (cur !== s) { cur = s; renderScenario(); } });
+      b.addEventListener('click', function () { if (cur !== s) { cur = s; renderScenario(); } closeDrawer(); });
       row.appendChild(b);
       if (s.custom) {
         var x = document.createElement('button');
         x.type = 'button'; x.className = 'scdel'; x.textContent = '×'; x.setAttribute('aria-label', 'Fall löschen');
         x.addEventListener('click', function () {
           scenarios.splice(scenarios.indexOf(s), 1);
-          if (cur === s) { cur = scenarios[0]; renderScenario(); } else renderList();
+          if (cur === s) { cur = null; renderScenario(); } else renderList();
         });
         row.appendChild(x);
       }
@@ -520,33 +562,56 @@
     });
   }
 
-  $('newcase').addEventListener('click', function () {
-    var f = $('caseform'); f.hidden = !f.hidden;
-    if (!f.hidden) $('cq').focus();
-  });
-  $('caseform').addEventListener('submit', function (e) {
-    e.preventDefault();
+  function addCase() {
     var v = $('cq').value.trim();
     if (!v) return;
     var s = { q: v, custom: true, boxes: [] };
     scenarios.push(s); cur = s;
-    $('cq').value = ''; $('caseform').hidden = true;
+    $('cq').value = '';
     renderScenario();
     $('nb').focus();
-  });
-  $('boxform').addEventListener('submit', function (e) {
-    e.preventDefault();
+  }
+  function addBox() {
     var v = $('nb').value.trim();
-    if (!v || !cur) return;
+    if (!v) return;
+    if (!cur) { $('cq').focus(); return; }
     var b = makeBox(v, true);
     cur.boxes.push(b);
     attach(b);
     $('nb').value = ''; $('nb').focus();
-  });
+  }
+  function onEnter(fn) { return function (e) { if (e.key === 'Enter') { e.preventDefault(); fn(); } }; }
+  $('caseadd').addEventListener('click', addCase);
+  $('boxadd').addEventListener('click', addBox);
+  $('cq').addEventListener('keydown', onEnter(addCase));
+  $('nb').addEventListener('keydown', onEnter(addBox));
   $('reset').addEventListener('click', function () {
+    if (!cur) return;
     cur.boxes.forEach(function (b) { b.side = null; setLevel(b, 1); });
     renderScenario();
   });
+
+  /* ---------- Menü und Start ---------- */
+  var drawer = $('drawer'), backdrop = $('backdrop'), menuBtn = $('menu');
+  function openDrawer() {
+    drawer.classList.add('open'); backdrop.classList.add('open');
+    drawer.setAttribute('aria-hidden', 'false'); menuBtn.setAttribute('aria-expanded', 'true');
+  }
+  function closeDrawer() {
+    drawer.classList.remove('open'); backdrop.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true'); menuBtn.setAttribute('aria-expanded', 'false');
+  }
+  menuBtn.addEventListener('click', function () { drawer.classList.contains('open') ? closeDrawer() : openDrawer(); });
+  $('dclose').addEventListener('click', closeDrawer);
+  backdrop.addEventListener('click', closeDrawer);
+  window.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeDrawer(); });
+
+  var startEl = $('start');
+  $('go').addEventListener('click', function () {
+    startEl.classList.add('gone');
+    setTimeout(function () { startEl.hidden = true; startEl.style.display = 'none'; }, 500);
+  });
+  $('go').focus();
 
   /* ---------- Skalierung ---------- */
   function fit() {
@@ -558,7 +623,7 @@
   window.addEventListener('resize', fit);
   if (window.ResizeObserver) new ResizeObserver(fit).observe(wrap);
 
-  cur = scenarios[0];
+  cur = null;
   renderScenario();
   draw();
   fit();
